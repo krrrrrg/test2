@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>하카 직영점 판매관리 대장</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        #result, #qr-code {
+            margin-top: 20px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        #qr-code canvas {
+            display: block;
+            margin: 20px 0;
+        }
+        #send-section, #scan-section {
+            margin-top: 20px;
+        }
+        #send-section button, #scan-section button {
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        .loaded-data-group {
+            margin-top: 15px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>하카 직영점 판매관리 대장</h1>
+        <div class="input-group">
+            <label for="name">성함:</label>
+            <input type="text" id="name">
+        </div>
+        <div class="input-group">
+            <label for="phone">휴대폰번호:</label>
+            <input type="text" id="phone" oninput="autoFillData()">
+        </div>
+        <div class="input-group">
+            <label for="address">주소:</label>
+            <input type="text" id="address">
+        </div>
+        <div class="input-group">
+            <label for="birthdate">생년월일:</label>
+            <input type="text" id="birthdate">
+        </div>
+        <button onclick="generateTextAndQRCode()">텍스트 및 QR 코드 생성</button>
+        <div id="result"></div>
+        <div id="qr-code"></div>
+        <div id="send-section">
+            <button onclick="sendSMS()">문자로 전송</button>
+        </div>
+        <div id="scan-section">
+            <h2>회원 확인하기</h2>
+            <div class="input-group">
+                <label for="serial-search">일렬번호 및 휴대폰 번호:</label>
+                <input type="text" id="serial-search" oninput="autoFillLoadedData()">
+            </div>
+            <div class="button-group">
+                <button onclick="loadDataBySerial()">일렬번호 및 휴대폰번호 불러오기</button>
+                <button onclick="startScanning()">QR 코드 스캔 시작</button>
+            </div>
+            <div class="loaded-data-group">
+                <div class="input-group">
+                    <label for="loaded-name">성함:</label>
+                    <input type="text" id="loaded-name" disabled>
+                </div>
+                <div class="input-group">
+                    <label for="loaded-phone">휴대폰번호:</label>
+                    <input type="text" id="loaded-phone" disabled>
+                </div>
+                <div class="input-group">
+                    <label for="loaded-address">주소:</label>
+                    <input type="text" id="loaded-address" disabled>
+                </div>
+                <div class="input-group">
+                    <label for="loaded-birthdate">생년월일:</label>
+                    <input type="text" id="loaded-birthdate" disabled>
+                </div>
+                <div class="input-group">
+                    <label for="nicotine-quantity">니코틴 수량:</label>
+                    <input type="number" id="nicotine-quantity">
+                </div>
+                <button onclick="saveData()">저장</button>
+            </div>
+            <div id="reader" style="width: 300px; margin-top: 20px;"></div>
+        </div>
+    </div>
+
+    <script>
+        // 미리 저장된 데이터
+        let storedData = {
+            "8662J": {
+                name: "제명환",
+                phone: "0108748031",
+                address: "부산광역시 해운대구 센텀중앙로 97 3301호",
+                birthdate: "19930706",
+                serialNumber: "8662J"
+            },
+            "01087488031": {
+                name: "제명환",
+                phone: "01087488031",
+                address: "부산광역시 해운대구 센텀중앙로 97 3301호",
+                birthdate: "19930706",
+                serialNumber: "01087488031"
+            }
+        };
+
+        let generatedData = '';
+
+        function generateSerialNumber() {
+            const numbers = Math.random().toString().slice(2, 6);
+            const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+            return numbers + letter;
+        }
+
+        function generateTextAndQRCode() {
+            const name = document.getElementById('name').value;
+            const phone = document.getElementById('phone').value;
+            const address = document.getElementById('address').value;
+            const birthdate = document.getElementById('birthdate').value;
+            const serialNumber = generateSerialNumber();
+
+            const data = {
+                name,
+                phone,
+                address,
+                birthdate,
+                serialNumber
+            };
+            storedData[serialNumber] = data; // 데이터 저장
+
+            const resultData = `성함: ${name}\n휴대폰번호: ${phone}\n주소: ${address}\n생년월일: ${birthdate}\n일렬번호: ${serialNumber}`;
+            generatedData = resultData;  // 저장된 데이터
+
+            const resultContainer = document.getElementById('result');
+            resultContainer.textContent = resultData;
+
+            const qrCodeContainer = document.getElementById('qr-code');
+            qrCodeContainer.innerHTML = '';
+            const canvas = document.createElement('canvas');
+            qrCodeContainer.appendChild(canvas);
+
+            QRCode.toCanvas(canvas, resultData, function (error) {
+                if (error) {
+                    console.error(error);
+                } else {
+                    console.log('QR 코드가 생성되었습니다.');
+                }
+            });
+        }
+
+        function sendSMS() {
+            alert("문자 전송 기능은 아직 구현되지 않았습니다.");
+            console.log("전송할 데이터:", generatedData);
+        }
+
+        function autoFillData() {
+            const phone = document.getElementById('phone').value;
+            if (phone === '87488031') {
+                const data = storedData["01087488031"];
+                document.getElementById('name').value = data.name;
+                document.getElementById('address').value = data.address;
+                document.getElementById('birthdate').value = data.birthdate;
+            }
+        }
+
+        function autoFillLoadedData() {
+            const serialOrPhone = document.getElementById('serial-search').value;
+            let data = storedData[serialOrPhone];
+            if (!data) {
+                data = Object.values(storedData).find(item => item.phone.endsWith(serialOrPhone));
+            }
+
+            if (data) {
+                document.getElementById('loaded-name').value = data.name;
+                document.getElementById('loaded-phone').value = data.phone;
+                document.getElementById('loaded-address').value = data.address;
+                document.getElementById('loaded-birthdate').value = data.birthdate;
+            }
+        }
+
+        function loadDataBySerial() {
+            const serialOrPhone = document.getElementById('serial-search').value;
+            let data = storedData[serialOrPhone];
+            if (!data) {
+                data = Object.values(storedData).find(item => item.phone.endsWith(serialOrPhone));
+            }
+
+            if (data) {
+                document.getElementById('loaded-name').value = data.name;
+                document.getElementById('loaded-phone').value = data.phone;
+                document.getElementById('loaded-address').value = data.address;
+                document.getElementById('loaded-birthdate').value = data.birthdate;
+            } else {
+                alert("일치하는 기록이 없습니다.");
+            }
+        }
+
+        function startScanning() {
+            const html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start(
+                { facingMode: "environment" },
+                {
+                    fps: 10,
+                    qrbox: 250
+                },
+                qrCodeMessage => {
+                    const data = qrCodeMessage.split('\n');
+                    const serialNumber = data[data.length - 1].split(': ')[1];
+                    document.getElementById('serial-search').value = serialNumber;
+                    loadDataBySerial();
+                    html5QrCode.stop().then(ignore => {
+                        console.log("QR 코드 스캔이 중지되었습니다.");
+                    }).catch(err => {
+                        console.error("QR 코드 스캔 중지 오류:", err);
+                    });
+                },
+                errorMessage => {
+                    console.error("QR 코드 스캔 오류:", errorMessage);
+                })
+                .catch(err => {
+                    console.error("QR 코드 스캔 시작 오류:", err);
+                });
+        }
+
+        function saveData() {
+            const name = document.getElementById('loaded-name').value;
+            const phone = document.getElementById('loaded-phone').value;
+            const address = document.getElementById('loaded-address').value;
+            const birthdate = document.getElementById('loaded-birthdate').value;
+            const nicotineQuantity = document.getElementById('nicotine-quantity').value;
+            alert(`저장되었습니다.\n성함: ${name}\n휴대폰번호: ${phone}\n주소: ${address}\n생년월일: ${birthdate}\n니코틴 수량: ${nicotineQuantity}`);
+        }
+    </script>
+</body>
+</html>
